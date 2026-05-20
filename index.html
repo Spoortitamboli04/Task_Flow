@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Taskflow — Smart To-Do & Calendar</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- FullCalendar -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css" rel="stylesheet" />
+
+  <!-- SortableJS for drag-and-drop -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ========== TOAST CONTAINER ========== -->
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ========== SIDEBAR ========== -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <span class="logo-icon"><i class="fa-solid fa-bolt"></i></span>
+      <span class="logo-text">Taskflow</span>
+    </div>
+    <button class="sidebar-close" id="sidebarClose"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a href="#" class="nav-item active" data-view="dashboard">
+      <i class="fa-solid fa-house"></i><span>Dashboard</span>
+    </a>
+    <a href="#" class="nav-item" data-view="tasks">
+      <i class="fa-solid fa-list-check"></i><span>All Tasks</span>
+    </a>
+    <a href="#" class="nav-item" data-view="today">
+      <i class="fa-solid fa-sun"></i><span>Today</span>
+    </a>
+    <a href="#" class="nav-item" data-view="upcoming">
+      <i class="fa-solid fa-calendar-days"></i><span>Upcoming</span>
+    </a>
+    <a href="#" class="nav-item" data-view="calendar">
+      <i class="fa-solid fa-calendar"></i><span>Calendar</span>
+    </a>
+    <a href="#" class="nav-item" data-view="routines">
+      <i class="fa-solid fa-rotate"></i><span>Routines</span>
+      <span class="nav-badge" id="routinesBadge" style="display:none"></span>
+    </a>
+  </nav>
+
+  <div class="sidebar-section-title">Categories</div>
+  <div class="category-list" id="categoryList"></div>
+  <button class="add-category-btn" id="addCategoryBtn">
+    <i class="fa-solid fa-plus"></i> Add Category
+  </button>
+
+  <div class="sidebar-footer">
+    <button class="theme-toggle" id="themeToggle">
+      <i class="fa-solid fa-moon" id="themeIcon"></i>
+      <span id="themeLabel">Dark Mode</span>
+    </button>
+  </div>
+</aside>
+
+<!-- ========== MAIN CONTENT ========== -->
+<div class="main-wrapper">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <button class="hamburger" id="hamburger"><i class="fa-solid fa-bars"></i></button>
+    <div class="topbar-title" id="topbarTitle">Dashboard</div>
+    <div class="topbar-actions">
+      <div class="search-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="globalSearch" placeholder="Search tasks…" />
+      </div>
+      <button class="btn-add-task" id="topbarAddTask">
+        <i class="fa-solid fa-plus"></i> New Task
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== DASHBOARD VIEW ===== -->
+  <section class="view active" id="view-dashboard">
+    <div class="section-greeting">
+      <h1 id="greetingText">Good morning! 👋</h1>
+      <p id="greetingDate"></p>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card stat-total">
+        <div class="stat-icon"><i class="fa-solid fa-layer-group"></i></div>
+        <div class="stat-info">
+          <span class="stat-number" id="statTotal">0</span>
+          <span class="stat-label">Total Tasks</span>
+        </div>
+      </div>
+      <div class="stat-card stat-completed">
+        <div class="stat-icon"><i class="fa-solid fa-circle-check"></i></div>
+        <div class="stat-info">
+          <span class="stat-number" id="statCompleted">0</span>
+          <span class="stat-label">Completed</span>
+        </div>
+      </div>
+      <div class="stat-card stat-pending">
+        <div class="stat-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+        <div class="stat-info">
+          <span class="stat-number" id="statPending">0</span>
+          <span class="stat-label">Pending</span>
+        </div>
+      </div>
+      <div class="stat-card stat-overdue">
+        <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <div class="stat-info">
+          <span class="stat-number" id="statOverdue">0</span>
+          <span class="stat-label">Overdue</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-card">
+      <div class="progress-header">
+        <span>Overall Progress</span>
+        <span id="progressPercent">0%</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+      </div>
+    </div>
+
+    <!-- Today + Recent -->
+    <div class="dashboard-grid">
+      <div class="dash-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-sun"></i> Today's Tasks</h2>
+          <a href="#" class="see-all" data-view="today">See all</a>
+        </div>
+        <div class="task-list" id="dashTodayList"></div>
+      </div>
+
+      <div class="dash-panel">
+        <div class="panel-header">
+          <h2><i class="fa-solid fa-clock-rotate-left"></i> Recent Activity</h2>
+        </div>
+        <div class="activity-list" id="activityList"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ALL TASKS VIEW ===== -->
+  <section class="view" id="view-tasks">
+    <div class="view-header">
+      <h1>All Tasks</h1>
+      <button class="btn-add-task" id="tasksAddBtn">
+        <i class="fa-solid fa-plus"></i> New Task
+      </button>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Status</label>
+        <select id="filterStatus">
+          <option value="all">All</option>
+          <option value="pending">Pending</option>
+          <option value="completed">Completed</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Priority</label>
+        <select id="filterPriority">
+          <option value="all">All</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Category</label>
+        <select id="filterCategory">
+          <option value="all">All</option>
+        </select>
+      </div>
+      <button class="btn-clear-filters" id="clearFilters">
+        <i class="fa-solid fa-rotate-left"></i> Reset
+      </button>
+    </div>
+
+    <div class="task-list sortable" id="allTasksList"></div>
+  </section>
+
+  <!-- ===== TODAY VIEW ===== -->
+  <section class="view" id="view-today">
+    <div class="view-header">
+      <h1>Today's Tasks</h1>
+      <button class="btn-add-task" id="todayAddBtn">
+        <i class="fa-solid fa-plus"></i> New Task
+      </button>
+    </div>
+    <div class="task-list" id="todayTasksList"></div>
+  </section>
+
+  <!-- ===== UPCOMING VIEW ===== -->
+  <section class="view" id="view-upcoming">
+    <div class="view-header"><h1>Upcoming Tasks</h1></div>
+    <div class="task-list" id="upcomingTasksList"></div>
+  </section>
+
+  <!-- ===== CALENDAR VIEW ===== -->
+  <section class="view" id="view-calendar">
+    <div class="view-header"><h1>Calendar</h1></div>
+    <div class="calendar-legend">
+      <span class="legend-item"><span class="dot dot-high"></span>High</span>
+      <span class="legend-item"><span class="dot dot-medium"></span>Medium</span>
+      <span class="legend-item"><span class="dot dot-low"></span>Low</span>
+    </div>
+    <div id="calendarEl"></div>
+  </section>
+
+  <!-- ===== ROUTINES VIEW ===== -->
+  <section class="view" id="view-routines">
+    <div class="view-header">
+      <div>
+        <h1>Routines</h1>
+        <p class="view-subtitle">Daily habits &amp; interval reminders — auto-added every day</p>
+      </div>
+      <button class="btn-add-task" id="routinesAddBtn">
+        <i class="fa-solid fa-plus"></i> New Routine
+      </button>
+    </div>
+    <div class="routines-grid" id="routinesGrid"></div>
+  </section>
+
+</div><!-- end main-wrapper -->
+
+<!-- ========== TASK MODAL ========== -->
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modalTitle">New Task</h2>
+      <button class="modal-close" id="modalClose"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Title <span class="required">*</span></label>
+        <input type="text" id="taskTitle" placeholder="What needs to be done?" />
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="taskDesc" rows="3" placeholder="Add some details…"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Due Date</label>
+          <input type="date" id="taskDue" />
+        </div>
+        <div class="form-group">
+          <label>Priority</label>
+          <select id="taskPriority">
+            <option value="low">🟢 Low</option>
+            <option value="medium" selected>🟡 Medium</option>
+            <option value="high">🔴 High</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select id="taskCategory"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="modalCancel">Cancel</button>
+      <button class="btn-primary" id="modalSave">Save Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== TASK DETAIL MODAL ========== -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal modal-detail">
+    <div class="modal-header">
+      <h2 id="detailTitle">Task Details</h2>
+      <button class="modal-close" id="detailClose"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-footer">
+      <button class="btn-danger" id="detailDelete"><i class="fa-solid fa-trash"></i> Delete</button>
+      <button class="btn-primary" id="detailEdit"><i class="fa-solid fa-pen"></i> Edit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== ADD CATEGORY MODAL ========== -->
+<div class="modal-overlay" id="catModal">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <h2>Add Category</h2>
+      <button class="modal-close" id="catModalClose"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Category Name</label>
+        <input type="text" id="catName" placeholder="e.g. Finance" />
+      </div>
+      <div class="form-group">
+        <label>Color</label>
+        <div class="color-picker" id="colorPicker"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="catCancel">Cancel</button>
+      <button class="btn-primary" id="catSave">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== ROUTINE MODAL ========== -->
+<div class="modal-overlay" id="routineModal">
+  <div class="modal modal-routine">
+    <div class="modal-header">
+      <h2 id="routineModalTitle">New Routine</h2>
+      <button class="modal-close" id="routineModalClose"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label>Routine Title <span class="required">*</span></label>
+        <input type="text" id="routineTitle" placeholder="e.g. Drink Water, Morning Workout…" />
+      </div>
+
+      <div class="form-group">
+        <label>Description</label>
+        <input type="text" id="routineDesc" placeholder="Optional notes" />
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priority</label>
+          <select id="routinePriority">
+            <option value="low">🟢 Low</option>
+            <option value="medium" selected>🟡 Medium</option>
+            <option value="high">🔴 High</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Category</label>
+          <select id="routineCategory"></select>
+        </div>
+      </div>
+
+      <!-- Interval Reminder -->
+      <div class="form-group">
+        <label class="toggle-label">
+          <span><i class="fa-solid fa-bell"></i> Interval Reminder</span>
+          <div class="toggle-switch">
+            <input type="checkbox" id="routineHasInterval" />
+            <span class="toggle-knob"></span>
+          </div>
+        </label>
+        <p class="field-hint">Get a browser notification every few hours as a nudge.</p>
+      </div>
+
+      <div class="interval-options" id="intervalOptions" style="display:none">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Remind every</label>
+            <select id="routineInterval">
+              <option value="0.5">30 minutes</option>
+              <option value="1">1 hour</option>
+              <option value="2" selected>2 hours</option>
+              <option value="3">3 hours</option>
+              <option value="4">4 hours</option>
+              <option value="6">6 hours</option>
+              <option value="8">8 hours</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Active window</label>
+            <select id="routineWindow">
+              <option value="all">All day</option>
+              <option value="morning">Morning (6am–12pm)</option>
+              <option value="afternoon">Afternoon (12pm–6pm)</option>
+              <option value="evening">Evening (6pm–10pm)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Start time (optional)</label>
+            <input type="time" id="routineStartTime" />
+          </div>
+          <div class="form-group">
+            <label>End time (optional)</label>
+            <input type="time" id="routineEndTime" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Days of week picker -->
+      <div class="form-group">
+        <label>Active Days</label>
+        <div class="day-picker" id="dayPicker">
+          <button type="button" class="day-btn active" data-day="0">Su</button>
+          <button type="button" class="day-btn active" data-day="1">Mo</button>
+          <button type="button" class="day-btn active" data-day="2">Tu</button>
+          <button type="button" class="day-btn active" data-day="3">We</button>
+          <button type="button" class="day-btn active" data-day="4">Th</button>
+          <button type="button" class="day-btn active" data-day="5">Fr</button>
+          <button type="button" class="day-btn active" data-day="6">Sa</button>
+        </div>
+        <p class="field-hint">Task will be auto-added on selected days only.</p>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="routineCancel">Cancel</button>
+      <button class="btn-primary" id="routineSave"><i class="fa-solid fa-rotate"></i> Save Routine</button>
+    </div>
+  </div>
+</div>
+
+<!-- FullCalendar JS -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+<!-- App Script -->
+<script src="script.js"></script>
+</body>
+</html>
