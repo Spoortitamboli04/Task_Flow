@@ -14,6 +14,19 @@ const DEFAULT_CATEGORIES = [
   { id: 'health',   name: 'Health',   color: '#10b981' },
 ];
 
+/**
+ * Ensure the 4 default categories always exist in the user's list.
+ * Any custom categories the user added are kept alongside them.
+ */
+function mergeWithDefaults(saved) {
+  const result = [...DEFAULT_CATEGORIES];
+  saved.forEach(cat => {
+    // Add custom categories that aren't one of the defaults
+    if (!result.find(d => d.id === cat.id)) result.push(cat);
+  });
+  return result;
+}
+
 const COLOR_PALETTE = [
   '#ef4444','#f97316','#f59e0b','#84cc16',
   '#10b981','#06b6d4','#3b82f6','#6366f1',
@@ -150,110 +163,47 @@ function showToast(message, type = 'info', duration = 3000) {
 // AUTH SCREEN
 // ─────────────────────────────────────────────
 
-// Tab switching
-document.querySelectorAll('.auth-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.auth-panel').forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
-  });
-});
-
-// Password eye toggles
-document.querySelectorAll('.pw-eye').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const inp = document.getElementById(btn.dataset.target);
-    const isText = inp.type === 'text';
-    inp.type = isText ? 'password' : 'text';
-    btn.querySelector('i').className = isText ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
-  });
-});
-
 function showAuthError(elId, msg) {
   const el = document.getElementById(elId);
-  el.textContent = msg;
-  el.style.display = msg ? 'block' : 'none';
+  if (!el) return;
+  el.textContent    = msg;
+  el.style.display  = msg ? 'block' : 'none';
 }
 
-// Google Sign-In (both buttons)
+// Google Sign-In — single button, single function
 async function signInWithGoogle() {
+  const btn = document.getElementById('googleSignInBtn');
+  btn.disabled  = true;
+  btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Signing in…`;
+  showAuthError('authError', '');
   try {
     await auth.signInWithPopup(googleProvider);
-    // onAuthStateChanged will handle the rest
+    // onAuthStateChanged handles the rest
   } catch (e) {
-    showAuthError('loginError', friendlyAuthError(e.code));
-    showAuthError('signupError', friendlyAuthError(e.code));
+    showAuthError('authError', friendlyAuthError(e.code));
+    resetGoogleBtn();
   }
 }
 document.getElementById('googleSignInBtn').addEventListener('click', signInWithGoogle);
-document.getElementById('googleSignUpBtn').addEventListener('click', signInWithGoogle);
-
-// Email Sign-In
-document.getElementById('emailSignInBtn').addEventListener('click', async () => {
-  const email    = document.getElementById('loginEmail').value.trim();
-  const password = document.getElementById('loginPassword').value;
-  const remember = document.getElementById('rememberMe').checked;
-  showAuthError('loginError', '');
-  if (!email || !password) { showAuthError('loginError', 'Please fill in all fields.'); return; }
-  try {
-    const persistence = remember
-      ? firebase.auth.Auth.Persistence.LOCAL
-      : firebase.auth.Auth.Persistence.SESSION;
-    await auth.setPersistence(persistence);
-    await auth.signInWithEmailAndPassword(email, password);
-  } catch (e) {
-    showAuthError('loginError', friendlyAuthError(e.code));
-  }
-});
-
-// Email Sign-Up
-document.getElementById('emailSignUpBtn').addEventListener('click', async () => {
-  const name     = document.getElementById('signupName').value.trim();
-  const email    = document.getElementById('signupEmail').value.trim();
-  const password = document.getElementById('signupPassword').value;
-  showAuthError('signupError', '');
-  if (!name || !email || !password) { showAuthError('signupError', 'Please fill in all fields.'); return; }
-  if (password.length < 6)          { showAuthError('signupError', 'Password must be at least 6 characters.'); return; }
-  try {
-    const cred = await auth.createUserWithEmailAndPassword(email, password);
-    await cred.user.updateProfile({ displayName: name });
-  } catch (e) {
-    showAuthError('signupError', friendlyAuthError(e.code));
-  }
-});
-
-// Forgot password
-document.getElementById('forgotLink').addEventListener('click', async e => {
-  e.preventDefault();
-  const email = document.getElementById('loginEmail').value.trim();
-  if (!email) { showAuthError('loginError', 'Enter your email above first.'); return; }
-  try {
-    await auth.sendPasswordResetEmail(email);
-    showAuthError('loginError', '');
-    showToast('Password reset email sent!', 'success');
-  } catch (e) {
-    showAuthError('loginError', friendlyAuthError(e.code));
-  }
-});
 
 // Sign-out
 document.getElementById('signOutBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('signOutBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
   teardownFirestoreListeners();
   await auth.signOut();
+  // onAuthStateChanged will reset everything including the Google button
 });
 
 function friendlyAuthError(code) {
   const map = {
-    'auth/user-not-found':       'No account found with this email.',
-    'auth/wrong-password':       'Incorrect password.',
-    'auth/invalid-credential':   'Invalid email or password.',
-    'auth/email-already-in-use': 'This email is already registered.',
-    'auth/invalid-email':        'Please enter a valid email address.',
-    'auth/weak-password':        'Password must be at least 6 characters.',
-    'auth/popup-closed-by-user': 'Sign-in popup was closed.',
-    'auth/network-request-failed': 'Network error. Check your connection.',
-    'auth/too-many-requests':    'Too many attempts. Try again later.',
+    'auth/popup-closed-by-user':    'Sign-in popup was closed. Please try again.',
+    'auth/popup-blocked':           'Popup was blocked by your browser. Please allow popups.',
+    'auth/network-request-failed':  'Network error. Check your connection.',
+    'auth/too-many-requests':       'Too many attempts. Try again later.',
+    'auth/user-disabled':           'This account has been disabled.',
+    'auth/account-exists-with-different-credential': 'An account already exists with this email.',
   };
   return map[code] || 'Something went wrong. Please try again.';
 }
@@ -270,14 +220,42 @@ auth.onAuthStateChanged(async user => {
   } else {
     currentUser = null;
     teardownFirestoreListeners();
+
+    // Always reset the Google button to its default state
+    resetGoogleBtn();
+
+    // Clear any auth errors
+    showAuthError('authError', '');
+
+    // Show auth screen, hide app
     document.getElementById('authScreen').style.display = 'flex';
     document.getElementById('appScreen').style.display  = 'none';
-    // Reset state
-    state.tasks = []; state.routines = []; state.activity = [];
+
+    // Reset in-memory state
+    state.tasks      = [];
+    state.routines   = [];
+    state.activity   = [];
     state.categories = [...DEFAULT_CATEGORIES];
     calendarInstance = null;
+    _autoAddDoneToday = false;
   }
 });
+
+const GOOGLE_BTN_HTML = `
+  <svg width="20" height="20" viewBox="0 0 48 48">
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+  </svg>
+  Continue with Google`;
+
+function resetGoogleBtn() {
+  const btn = document.getElementById('googleSignInBtn');
+  if (!btn) return;
+  btn.disabled  = false;
+  btn.innerHTML = GOOGLE_BTN_HTML;
+}
 
 // ─────────────────────────────────────────────
 // BOOTSTRAP — runs once after login
@@ -317,11 +295,12 @@ async function bootstrapUserApp(user) {
   setTimeout(checkUpcomingReminders, 2000);
 }
 
-// Create the user document if first login
+// Create the user document if first login — NO sample data, clean slate
 async function ensureUserDoc(user) {
-  const ref = userDoc();
+  const ref  = userDoc();
   const snap = await ref.get();
   if (!snap.exists) {
+    // Brand-new user: create their doc with the 4 default categories
     await ref.set({
       displayName: user.displayName || '',
       email:       user.email || '',
@@ -329,66 +308,36 @@ async function ensureUserDoc(user) {
       activity:    [],
       createdAt:   Date.now(),
     });
-    // Seed sample tasks & routines for new users
-    await seedNewUserData();
+    state.categories = [...DEFAULT_CATEGORIES];
+    state.activity   = [];
   } else {
-    // Load categories & activity from meta doc
+    // Returning user: merge their saved categories with defaults
+    // so the 4 built-in ones are always guaranteed to be there
     const data = snap.data();
-    state.categories = data.categories || [...DEFAULT_CATEGORIES];
-    state.activity   = data.activity   || [];
+    state.categories = mergeWithDefaults(data.categories || []);
+    state.activity   = data.activity || [];
+    // If their saved doc is missing the defaults, patch it silently
+    await ref.update({ categories: state.categories }).catch(() => {});
   }
-}
-
-// Seed first-time sample data into Firestore
-async function seedNewUserData() {
-  const today  = todayStr();
-  const tmr    = new Date(); tmr.setDate(tmr.getDate() + 1);
-  const tmrStr = tmr.toISOString().slice(0, 10);
-  const nw     = new Date(); nw.setDate(nw.getDate() + 5);
-  const nwStr  = nw.toISOString().slice(0, 10);
-  const yd     = new Date(); yd.setDate(yd.getDate() - 1);
-  const ydStr  = yd.toISOString().slice(0, 10);
-
-  const tasksCol = userCol('tasks');
-  const sampleTasks = [
-    { title: 'Review project proposal', description: 'Go through the Q3 proposal.', due: today,  priority: 'high',   category: 'work',     completed: false },
-    { title: 'Morning run – 5km',       description: 'Stick to the training plan.', due: today,  priority: 'medium', category: 'health',   completed: true  },
-    { title: 'Read Chapter 4 – ML',     description: 'Finish the neural nets chapter.', due: tmrStr, priority: 'medium', category: 'study', completed: false },
-    { title: 'Call dentist',            description: '', due: tmrStr, priority: 'low',    category: 'personal', completed: false },
-    { title: 'Team standup notes',      description: 'Summarise last sprint.',      due: nwStr,  priority: 'medium', category: 'work',     completed: false },
-    { title: 'Submit assignment',       description: 'Upload to the portal.',       due: ydStr,  priority: 'high',   category: 'study',    completed: false },
-  ];
-  const batch = db.batch();
-  sampleTasks.forEach(t => {
-    const ref = tasksCol.doc();
-    batch.set(ref, { ...t, createdAt: Date.now(), updatedAt: Date.now() });
-  });
-
-  const routinesCol = userCol('routines');
-  const sampleRoutines = [
-    { title: 'Drink Water 💧', description: 'Stay hydrated — 8 glasses a day!', priority: 'medium', category: 'health',   days: [0,1,2,3,4,5,6], active: true,  hasInterval: true,  intervalHours: 2, window_: 'all', startTime: '08:00', endTime: '22:00', lastAutoAdded: null, lastNotified: 0 },
-    { title: 'Morning Workout 🏃', description: '30-min exercise session',        priority: 'high',   category: 'health',   days: [1,2,3,4,5],     active: true,  hasInterval: false, intervalHours: 0, window_: 'morning', startTime: '', endTime: '', lastAutoAdded: null, lastNotified: 0 },
-    { title: 'Daily Journal ✍️',  description: 'Write 5 minutes about the day',  priority: 'low',    category: 'personal', days: [0,1,2,3,4,5,6], active: true,  hasInterval: false, intervalHours: 0, window_: 'evening', startTime: '', endTime: '', lastAutoAdded: null, lastNotified: 0 },
-    { title: 'Check Posture 🪑',  description: 'Sit up straight, take a break',  priority: 'low',    category: 'health',   days: [1,2,3,4,5],     active: false, hasInterval: true,  intervalHours: 1, window_: 'all', startTime: '09:00', endTime: '18:00', lastAutoAdded: null, lastNotified: 0 },
-  ];
-  sampleRoutines.forEach(r => {
-    const ref = routinesCol.doc();
-    batch.set(ref, { ...r, createdAt: Date.now() });
-  });
-  await batch.commit();
 }
 
 // ─────────────────────────────────────────────
 // FIRESTORE REAL-TIME LISTENERS
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// FIRESTORE REAL-TIME LISTENERS
+// ─────────────────────────────────────────────
+
+// Lock flag — prevents autoAddRoutineTasks running more than once per session load
+let _autoAddDoneToday = false;
+
 function setupFirestoreListeners() {
-  // Tasks
+  // Tasks — just update state and re-render, never call autoAdd here
   unsubTasks = userCol('tasks')
     .orderBy('createdAt', 'desc')
     .onSnapshot(snap => {
       state.tasks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       refreshAll();
-      autoAddRoutineTasks();
     }, err => console.error('Tasks listener error:', err));
 
   // Routines
@@ -404,11 +353,20 @@ function setupFirestoreListeners() {
   unsubMeta = userDoc().onSnapshot(snap => {
     if (!snap.exists) return;
     const data = snap.data();
-    state.categories = data.categories || [...DEFAULT_CATEGORIES];
-    state.activity   = data.activity   || [];
+    // Always merge saved categories with defaults so the 4 are always present
+    const saved = data.categories || [];
+    const merged = mergeWithDefaults(saved);
+    state.categories = merged;
+    state.activity   = data.activity || [];
     renderCategorySidebar();
     if (document.getElementById('activityList')) renderActivity();
   }, err => console.error('Meta listener error:', err));
+
+  // Run auto-add exactly once, after a short delay to let listeners populate state
+  _autoAddDoneToday = false;
+  setTimeout(() => {
+    if (!_autoAddDoneToday) autoAddRoutineTasks();
+  }, 1500);
 }
 
 function teardownFirestoreListeners() {
@@ -1116,43 +1074,68 @@ async function deleteRoutine(id) {
   } catch (e) { showToast('Failed to delete routine.', 'error'); }
 }
 
-// Auto-add routine tasks for today
+// Auto-add routine tasks for today — runs ONCE per session load
 async function autoAddRoutineTasks() {
   if (!currentUser) return;
+  if (_autoAddDoneToday) return;   // lock: never run twice in same session
+  _autoAddDoneToday = true;        // set lock immediately before any await
+
   const today     = todayStr();
   const dayOfWeek = new Date().getDay();
-  const batch     = db.batch();
-  let added       = 0;
 
-  state.routines.forEach(r => {
-    if (!r.active) return;
-    if (!r.days.includes(dayOfWeek)) return;
-    if (r.lastAutoAdded === today) return;
+  // Fetch fresh routine data directly from Firestore to avoid stale state
+  const routinesSnap = await userCol('routines').get();
+  const routines     = routinesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const ref = userCol('tasks').doc();
-    batch.set(ref, {
-      title:       r.title, description: r.description||'',
-      due:         today,   priority:    r.priority,
-      category:    r.category, completed: false,
-      fromRoutine: r.id,   createdAt:   Date.now(), updatedAt: Date.now(),
+  const toAdd = routines.filter(r =>
+    r.active &&
+    r.days.includes(dayOfWeek) &&
+    r.lastAutoAdded !== today   // not yet added today
+  );
+
+  if (!toAdd.length) return;
+
+  const batch = db.batch();
+
+  toAdd.forEach(r => {
+    // Add one task
+    const taskRef = userCol('tasks').doc();
+    batch.set(taskRef, {
+      title:       r.title,
+      description: r.description || '',
+      due:         today,
+      priority:    r.priority,
+      category:    r.category,
+      completed:   false,
+      fromRoutine: r.id,
+      createdAt:   Date.now(),
+      updatedAt:   Date.now(),
     });
+    // Mark routine as added today so it never duplicates
     const routineRef = userCol('routines').doc(r.id);
     batch.update(routineRef, { lastAutoAdded: today });
-    added++;
   });
 
-  if (added>0) {
-    await batch.commit().catch(e => console.error('Auto-add batch error:', e));
-    showToast(`${added} routine task${added>1?'s':''} added for today 📅`, 'info', 4000);
-    logActivity(`Auto-added ${added} routine task(s) for today`, '#6366f1');
+  try {
+    await batch.commit();
+    const n = toAdd.length;
+    showToast(`${n} routine task${n > 1 ? 's' : ''} added for today 📅`, 'info', 4000);
+    logActivity(`Auto-added ${n} routine task(s) for today`, '#6366f1');
+  } catch (e) {
+    console.error('Auto-add batch error:', e);
+    _autoAddDoneToday = false; // allow retry if commit failed
   }
 }
 
 // Midnight refresh scheduler
 function scheduleMidnightRefresh() {
   const now      = new Date();
-  const midnight = new Date(now); midnight.setHours(24,0,30,0);
-  setTimeout(() => { autoAddRoutineTasks(); scheduleMidnightRefresh(); }, midnight-now);
+  const midnight = new Date(now); midnight.setHours(24, 0, 30, 0);
+  setTimeout(() => {
+    _autoAddDoneToday = false;  // reset lock for the new day
+    autoAddRoutineTasks();
+    scheduleMidnightRefresh();
+  }, midnight - now);
 }
 
 // Interval ticker — checks every 60s
@@ -1251,38 +1234,62 @@ async function saveRoutine() {
   const priority    = document.getElementById('routinePriority').value;
   const category    = document.getElementById('routineCategory').value;
   const hasInterval = document.getElementById('routineHasInterval').checked;
-  const intervalHrs = parseFloat(document.getElementById('routineInterval').value)||2;
+  const intervalHrs = parseFloat(document.getElementById('routineInterval').value) || 2;
   const window_     = document.getElementById('routineWindow').value;
   const startTime   = document.getElementById('routineStartTime').value;
   const endTime     = document.getElementById('routineEndTime').value;
-  const days        = [...document.querySelectorAll('.day-btn.active')].map(b=>parseInt(b.dataset.day));
+  const days        = [...document.querySelectorAll('.day-btn.active')].map(b => parseInt(b.dataset.day));
 
-  if (!title) { showToast('Please enter a routine title.','warning'); return; }
-  if (!days.length) { showToast('Select at least one active day.','warning'); return; }
+  if (!title)       { showToast('Please enter a routine title.', 'warning'); return; }
+  if (!days.length) { showToast('Select at least one active day.', 'warning'); return; }
 
-  const data = { title, description:desc, priority, category, days, hasInterval,
-    intervalHours:intervalHrs, window_:window_, startTime, endTime };
+  const data = { title, description: desc, priority, category, days,
+    hasInterval, intervalHours: intervalHrs, window_: window_, startTime, endTime };
 
   try {
     if (editingRoutineId) {
-      await userCol('routines').doc(editingRoutineId).update({ ...data, lastNotified:0 });
+      // Editing: just update the routine doc, don't touch tasks
+      await userCol('routines').doc(editingRoutineId).update({ ...data, lastNotified: 0 });
       logActivity(`Updated routine: "${title}"`, '#6366f1');
       showToast('Routine updated!', 'info');
+
     } else {
-      const newRef = await userCol('routines').add({ ...data, active:true, lastAutoAdded:null, lastNotified:0, createdAt:Date.now() });
+      // New routine: use a batch so the task + routine are written atomically
+      const today      = todayStr();
+      const todayDay   = new Date().getDay();
+      const addsToday  = days.includes(todayDay);
+
+      const batch      = db.batch();
+      const routineRef = userCol('routines').doc();   // new routine doc
+
+      // Write the routine (mark lastAutoAdded=today if it fires today, preventing auto-add duplication)
+      batch.set(routineRef, {
+        ...data,
+        active:         true,
+        lastAutoAdded:  addsToday ? today : null,   // ← prevents autoAddRoutineTasks re-adding
+        lastNotified:   0,
+        createdAt:      Date.now(),
+      });
+
+      // If today is one of its active days, add one task immediately
+      if (addsToday) {
+        const taskRef = userCol('tasks').doc();
+        batch.set(taskRef, {
+          title, description: desc, due: today, priority, category,
+          completed: false, fromRoutine: routineRef.id,
+          createdAt: Date.now(), updatedAt: Date.now(),
+        });
+      }
+
+      await batch.commit();
       logActivity(`Created routine: "${title}"`, '#6366f1');
       showToast(`Routine "${title}" created! 🔔`, 'success');
-      // Auto-add to today if active today
-      const todayDay = new Date().getDay();
-      if (days.includes(todayDay)) {
-        await userCol('tasks').add({ title, description:desc, due:todayStr(), priority, category, completed:false, fromRoutine:newRef.id, createdAt:Date.now(), updatedAt:Date.now() });
-        await newRef.update({ lastAutoAdded: todayStr() });
-        showToast(`"${title}" added to today's tasks!`, 'info', 3500);
-      }
+      if (addsToday) showToast(`"${title}" added to today's tasks!`, 'info', 3500);
     }
-    if (hasInterval && Notification.permission==='default') requestNotifPermission();
+
+    if (hasInterval && Notification.permission === 'default') requestNotifPermission();
     closeRoutineModal();
-  } catch(e) {
+  } catch (e) {
     console.error(e);
     showToast('Failed to save routine.', 'error');
   }

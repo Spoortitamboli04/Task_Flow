@@ -1570,12 +1570,49 @@ body::before {
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 36px 40px;
+  padding: 40px 44px;
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
   box-shadow: var(--shadow-lg);
   animation: slideUp 0.3s cubic-bezier(0.4,0,0.2,1);
+  text-align: center;
 }
+
+.auth-welcome {
+  margin: 20px 0 28px;
+}
+
+.auth-welcome-icon {
+  font-size: 2.8rem;
+  margin-bottom: 10px;
+  line-height: 1;
+}
+
+.auth-welcome-title {
+  font-family: var(--font-head);
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.auth-welcome-sub {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.auth-privacy {
+  margin-top: 20px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.auth-privacy i { color: var(--low); }
 
 .auth-logo {
   display: flex;
@@ -1635,25 +1672,32 @@ body::before {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 11px;
+  padding: 13px;
   background: var(--surface-solid);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: var(--text);
   cursor: pointer;
   transition: all var(--transition);
-  margin-bottom: 16px;
   font-family: var(--font-body);
+  letter-spacing: 0.01em;
 }
 
 .btn-google:hover {
   background: var(--bg2);
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-light);
+  transform: translateY(-1px);
+}
+
+.btn-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Divider */
